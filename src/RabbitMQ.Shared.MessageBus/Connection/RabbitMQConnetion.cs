@@ -1,23 +1,27 @@
-﻿using RabbitMQ.Client;
+﻿using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
+using RabbitMQ.Shared.MessageBus.Settings;
 
 namespace RabbitMQ.Shared.MessageBus.Connection
 {
     public class RabbitMQConnetion : IRabbitMQConnetion
     {
         private IConnection? _connection;
-        private readonly string _connectionString;
+        private readonly RabbitMQSetting _rabbitMqSetting;
 
-        public RabbitMQConnetion(string connectionString)
+        public RabbitMQConnetion(IOptions<RabbitMQSetting> setting)
         {
-            _connectionString = connectionString;
+            _rabbitMqSetting = setting.Value;
             Connect();
         }
 
-        public void Connect()
+        private void Connect()
         {
             var factory = new ConnectionFactory()
             {
-                Uri =new(_connectionString),
+                HostName = _rabbitMqSetting.HostName,
+                UserName = _rabbitMqSetting.UserName,
+                Password = _rabbitMqSetting.Password
             };
 
             _connection = factory.CreateConnection();
