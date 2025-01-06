@@ -2,20 +2,26 @@
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Shared.MessageBus.Connection;
-using RabbitMQ.Shared.MessageBus.Helper;
-using System.Text;
+using RabbitMQ.Shared.MessageBus.Extensions;
+using RabbitMQ.Shared.MessageBus.Serialization;
 
 namespace RabbitMQ.Shared.MessageBus.Messages
 {
-    public class MessageBus(IRabbitMQConnetion connetion) : IMessageBus
+    public class MessageBus(IRabbitMQConnetion connetion, IAMQPSerializer serializer) : IMessageBus
     {
         private readonly IRabbitMQConnetion _connetion = connetion;
+        private readonly IAMQPSerializer _serializer = serializer;
 
         public async Task PublishAsync<T>(T message, string exchangeName) where T : class
         {
             var channel = _connetion.CreateChannel();
             channel.ExchangeDeclare(exchangeName, ExchangeType.Fanout, durable: true);
-            var body = JsonSerialization.SerializeMessageInBytes(message);
+
+            var basicProperties = channel?.CreateBasicProperties().EnsureHeaders().SetDurable(true); ;
+
+            ArgumentNullException.ThrowIfNull(basicProperties, nameof(basicProperties));
+
+            var body = _serializer.Serialize(basicProperties, message);
             channel.BasicPublish(
                 exchange: exchangeName,
                 routingKey: string.Empty, // Usamos Fanout, então não há chave de roteamento
@@ -39,8 +45,7 @@ namespace RabbitMQ.Shared.MessageBus.Messages
             var consumer = new EventingBasicConsumer(channel);
             consumer.Received += (sender, eventArgs) =>
             {
-                var body = eventArgs.Body.ToArray();
-                var message = JsonSerialization.DeserializeMessage<T>(Encoding.UTF8.GetString(body));
+                var message = _serializer.Deserialize<T>(eventArgs);
 
                 Console.WriteLine($"Mensagem recebida: {message}");
 
